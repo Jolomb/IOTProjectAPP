@@ -17,6 +17,7 @@
 package com.jolomb.iotprojectapp;
 
 import android.app.Activity;
+import android.bluetooth.BluetoothClass;
 import android.bluetooth.BluetoothGattCharacteristic;
 import android.bluetooth.BluetoothGattService;
 import android.content.BroadcastReceiver;
@@ -25,6 +26,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.ServiceConnection;
+import android.graphics.Color;
 import android.os.Bundle;
 import android.os.IBinder;
 import android.util.Log;
@@ -33,10 +35,12 @@ import android.view.MenuItem;
 import android.view.View;
 import android.widget.AdapterView;
 import android.widget.ExpandableListView;
+import android.widget.ImageView;
 import android.widget.SimpleExpandableListAdapter;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -48,24 +52,42 @@ import java.util.List;
  * Bluetooth LE API.
  */
 public class DeviceControlActivity extends Activity {
+
+    private enum LockState {
+        WAITING_FOR_INPUT_BUFFER,
+        WAITING_FOR_ON_BOARD_CLICK,
+        RESPONSE_READY
+    }
+    private final static char REMOTE_WAITING_FOR_INPUT_CHAR = 'W';
+    private final static char REMOTE_WAITING_FOR_ONBOARD_BUTTON_CHAR = 'P';
+    private final static char REMOTE_LOCK_RESPONSE_READY_CHAR = 'R';
+
     private final static String TAG = DeviceControlActivity.class.getSimpleName();
 
     public static final String EXTRAS_DEVICE_NAME = "DEVICE_NAME";
     public static final String EXTRAS_DEVICE_ADDRESS = "DEVICE_ADDRESS";
 
     private TextView mConnectionState;
-    private TextView mDataField;
     private String mDeviceName;
     private String mDeviceAddress;
-    private ExpandableListView mGattServicesList;
     private BluetoothLeService mBluetoothLeService;
+
+    // Specific char of the remote device
+    private BluetoothGattCharacteristic mRemoteLockBufferChar;
+    private BluetoothGattCharacteristic mRemoteSignedResponseBuffer;
+
     private ArrayList<ArrayList<BluetoothGattCharacteristic>> mGattCharacteristics =
             new ArrayList<ArrayList<BluetoothGattCharacteristic>>();
     private boolean mConnected = false;
-    private BluetoothGattCharacteristic mNotifyCharacteristic;
 
     private final String LIST_NAME = "NAME";
     private final String LIST_UUID = "UUID";
+
+    private final int CRYPTO_CHALLANGE_LENGTH = 16;
+    private byte mChallangeBytes[];
+
+    private LockState mRemoteLockState;
+    private TextView mRemoteLocakStateText;
 
     // Code to manage Service lifecycle.
     private final ServiceConnection mServiceConnection = new ServiceConnection() {
@@ -99,7 +121,6 @@ public class DeviceControlActivity extends Activity {
             final String action = intent.getAction();
             if (BluetoothLeService.ACTION_GATT_CONNECTED.equals(action)) {
                 mConnected = true;
-                updateConnectionState(R.string.connected);
                 invalidateOptionsMenu();
             } else if (BluetoothLeService.ACTION_GATT_DISCONNECTED.equals(action)) {
                 mConnected = false;
@@ -107,76 +128,38 @@ public class DeviceControlActivity extends Activity {
                 invalidateOptionsMenu();
                 clearUI();
             } else if (BluetoothLeService.ACTION_GATT_SERVICES_DISCOVERED.equals(action)) {
-                // Show all the supported services and characteristics on the user interface.
-                //displayGattServices(mBluetoothLeService.getSupportedGattServices());
+                // Go over the remote GATT services
+                iterateServices(mBluetoothLeService.getSupportedGattServices());
+
             } else if (BluetoothLeService.ACTION_DATA_AVAILABLE.equals(action)) {
-                //displayData(intent.getStringExtra(BluetoothLeService.EXTRA_DATA));
-            }
-        }
-    };
-
-    // If a given GATT characteristic is selected, check for supported features.  This sample
-    // demonstrates 'Read' and 'Notify' features.  See
-    // http://d.android.com/reference/android/bluetooth/BluetoothGatt.html for the complete
-    // list of supported characteristic features.
-    private final ExpandableListView.OnChildClickListener servicesListClickListner =
-            new ExpandableListView.OnChildClickListener() {
-                @Override
-                public boolean onChildClick(ExpandableListView parent, View v, int groupPosition,
-                                            int childPosition, long id) {
-                    if (mGattCharacteristics != null) {
-                        final BluetoothGattCharacteristic characteristic =
-                                mGattCharacteristics.get(groupPosition).get(childPosition);
-                        final int charaProp = characteristic.getProperties();
-                        if ((charaProp & BluetoothGattCharacteristic.PROPERTY_READ) > 0) {
-                            // If there is an active notification on a characteristic, clear
-                            // it first so it doesn't update the data field on the user interface.
-                            if (mNotifyCharacteristic != null) {
-                                mBluetoothLeService.setCharacteristicNotification(
-                                        mNotifyCharacteristic, false);
-                                mNotifyCharacteristic = null;
+                String char_uuid = intent.getStringExtra(BluetoothLeService.EXTRA_UUID);
+                String char_data = intent.getStringExtra(BluetoothLeService.EXTRA_DATA);
+                if (char_uuid.equals(SampleGattAttributes.CRYPTO_SIGNER_RESPONSE_STATE)) {
+                    // The state of the locking machine should always be 1 byte == 2 chars in HEX
+                    if (char_data.length() == 3) {
+                        try {
+                            char currentLockState = (char) Integer.parseInt(char_data.trim(), 16);
+                            switch (currentLockState) {
+                                case REMOTE_WAITING_FOR_INPUT_CHAR:
+                                    mRemoteLockState = LockState.WAITING_FOR_INPUT_BUFFER;
+                                    break;
+                                case REMOTE_WAITING_FOR_ONBOARD_BUTTON_CHAR:
+                                    mRemoteLockState = LockState.WAITING_FOR_ON_BOARD_CLICK;
+                                    break;
+                                case REMOTE_LOCK_RESPONSE_READY_CHAR:
+                                    mRemoteLockState = LockState.RESPONSE_READY;
+                                    break;
                             }
-                            mBluetoothLeService.readCharacteristic(characteristic);
+                            updateRemoteLockState(mRemoteLockState);
+                        } catch (NumberFormatException ex) {
+                            // Well this means the other side is messed up...
+                            updateConnectionState(R.string.connected_non_compatible);
                         }
-                        if ((charaProp & BluetoothGattCharacteristic.PROPERTY_NOTIFY) > 0) {
-                            mNotifyCharacteristic = characteristic;
-                            mBluetoothLeService.setCharacteristicNotification(
-                                    characteristic, true);
-                        }
-                        return true;
                     }
-                    return false;
-                }
-            };
-
-    private final ExpandableListView.OnItemLongClickListener servicesListLongClickListener = new ExpandableListView.OnItemLongClickListener () {
-
-
-        public boolean onItemLongClick(AdapterView<?> parent, View view, int position, long id) {
-            long packedPosition = mGattServicesList.getExpandableListPosition(position);
-            int itemType = ExpandableListView.getPackedPositionType(packedPosition);
-            int groupPosition = ExpandableListView.getPackedPositionGroup(packedPosition);
-            int childPosition = ExpandableListView.getPackedPositionChild(packedPosition);
-
-            if (mGattCharacteristics != null) {
-                final BluetoothGattCharacteristic characteristic =
-                        mGattCharacteristics.get(groupPosition).get(childPosition);
-
-        /*  if child item clicked */
-                if (itemType == ExpandableListView.PACKED_POSITION_TYPE_CHILD) {
-                    final int charaProp = characteristic.getProperties();
-                    if ((charaProp & BluetoothGattCharacteristic.PROPERTY_WRITE) > 0) {
-                        mBluetoothLeService.writeCharacteristic(characteristic, "HI!");
-                        Toast.makeText(getApplicationContext(), "Written Chalange to the buffer",
-                                Toast.LENGTH_SHORT).show();
-                    }
-                    return true;
                 }
             }
-            return false;
         }
     };
-
 
 
     private void clearUI() {
@@ -193,20 +176,40 @@ public class DeviceControlActivity extends Activity {
         mDeviceName = intent.getStringExtra(EXTRAS_DEVICE_NAME);
         mDeviceAddress = intent.getStringExtra(EXTRAS_DEVICE_ADDRESS);
 
+        mRemoteLockBufferChar = null;
+
         // Sets up UI references.
-        mConnectionState = (TextView) findViewById(R.id.connection_state);
+        mConnectionState = findViewById(R.id.connection_state);
+        ((TextView) findViewById(R.id.device_address)).setText(mDeviceAddress);
+        mRemoteLocakStateText = findViewById(R.id.locking_state);
 
-        //((TextView) findViewById(R.id.device_address)).setText(mDeviceAddress);
-        //mGattServicesList = (ExpandableListView) findViewById(R.id.gatt_services_list);
-        //mGattServicesList.setOnChildClickListener(servicesListClickListner);
-        //mGattServicesList.setOnItemLongClickListener(servicesListLongClickListener);
-
-        //mDataField = (TextView) findViewById(R.id.data_value);
+        mRemoteLockState = LockState.WAITING_FOR_INPUT_BUFFER;
+        updateRemoteLockState(mRemoteLockState);
 
         getActionBar().setTitle(mDeviceName);
         getActionBar().setDisplayHomeAsUpEnabled(true);
         Intent gattServiceIntent = new Intent(this, BluetoothLeService.class);
         bindService(gattServiceIntent, mServiceConnection, BIND_AUTO_CREATE);
+
+        ImageView lockImage = (ImageView)findViewById(R.id.lock_image);
+
+        lockImage.setOnClickListener(new View.OnClickListener() {
+
+            @Override
+            public void onClick(View v) {
+                Toast.makeText(DeviceControlActivity.this, "Generating the random Crypto Challange", Toast.LENGTH_LONG).show();
+                SecureRandom random = new SecureRandom();
+                DeviceControlActivity.this.mChallangeBytes = new byte[CRYPTO_CHALLANGE_LENGTH];
+                random.nextBytes(mChallangeBytes);
+                final String randomString = new String(mChallangeBytes);
+
+                // Write the challange we just created to the remote GATT char
+                DeviceControlActivity.this.mBluetoothLeService.writeCharacteristic(
+                        DeviceControlActivity.this.mRemoteLockBufferChar,
+                        randomString
+                );
+            }
+        });
     }
 
     @Override
@@ -261,31 +264,47 @@ public class DeviceControlActivity extends Activity {
         return super.onOptionsItemSelected(item);
     }
 
+    private void updateRemoteLockState(final LockState state) {
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                switch (state) {
+                    case WAITING_FOR_INPUT_BUFFER:
+                        mRemoteLocakStateText.setText(R.string.waiting_for_user_click);
+                        break;
+                    case WAITING_FOR_ON_BOARD_CLICK:
+                        mRemoteLocakStateText.setText(R.string.waiting_for_onboard_click);
+                        break;
+                    case RESPONSE_READY:
+                        mRemoteLocakStateText.setText(R.string.lock_response_ready);
+                        break;
+                }
+            }
+        });
+    }
+
     private void updateConnectionState(final int resourceId) {
         runOnUiThread(new Runnable() {
             @Override
             public void run() {
                 mConnectionState.setText(resourceId);
+                if (resourceId == R.string.connected_non_compatible) {
+                    mConnectionState.setBackgroundColor(Color.RED);
+                }
             }
         });
     }
 
-    private void displayData(String data) {
-        if (data != null) {
-            mDataField.setText(data);
-        }
-    }
 
-    // Demonstrates how to iterate through the supported GATT Services/Characteristics.
-    // In this sample, we populate the data structure that is bound to the ExpandableListView
-    // on the UI.
-    private void displayGattServices(List<BluetoothGattService> gattServices) {
+    private void iterateServices(List<BluetoothGattService> gattServices) {
         if (gattServices == null) return;
         String uuid = null;
         ArrayList<HashMap<String, String>> gattServiceData = new ArrayList<HashMap<String, String>>();
         ArrayList<ArrayList<HashMap<String, String>>> gattCharacteristicData
                 = new ArrayList<ArrayList<HashMap<String, String>>>();
         mGattCharacteristics = new ArrayList<ArrayList<BluetoothGattCharacteristic>>();
+
+        boolean isCompatServiceFound = false;
 
         // Loops through available GATT Services.
         for (BluetoothGattService gattService : gattServices) {
@@ -296,7 +315,10 @@ public class DeviceControlActivity extends Activity {
             String serviceName = null;
             try {
                 serviceName = SampleGattAttributes.lookupNoDefault(uuid);
-            } catch(RuntimeException ex){
+                if (uuid.equals(SampleGattAttributes.CRYPTO_SIGNER_SERVICE)) {
+                    isCompatServiceFound = true;
+                }
+            } catch (RuntimeException ex) {
                 continue;
             }
             currentServiceData.put(
@@ -329,23 +351,31 @@ public class DeviceControlActivity extends Activity {
                         LIST_NAME, attributeName);
                 currentCharaData.put(LIST_UUID, uuid);
                 gattCharacteristicGroupData.add(currentCharaData);
+
+                // If it's the response state we want to get notified about it changing
+                if (uuid.equals(SampleGattAttributes.CRYPTO_SIGNER_RESPONSE_STATE)) {
+                    mBluetoothLeService.readCharacteristic(gattCharacteristic);
+                    mBluetoothLeService.setCharacteristicNotification(gattCharacteristic, true);
+                } else if (uuid.equals(SampleGattAttributes.CRYPTO_SIGNER_CHALLANGE_INPUT)) {
+                    // Hold this char aside for a while
+                    mRemoteLockBufferChar = gattCharacteristic;
+                } else if (uuid.equals(SampleGattAttributes.CRYPTO_SIGNER_SIGNED_RESPONSE)) {
+                    mRemoteSignedResponseBuffer = gattCharacteristic;
+                }
+
+
             }
             mGattCharacteristics.add(charas);
             gattCharacteristicData.add(gattCharacteristicGroupData);
         }
 
-        SimpleExpandableListAdapter gattServiceAdapter = new SimpleExpandableListAdapter(
-                this,
-                gattServiceData,
-                android.R.layout.simple_expandable_list_item_2,
-                new String[] {LIST_NAME, LIST_UUID},
-                new int[] { android.R.id.text1, android.R.id.text2 },
-                gattCharacteristicData,
-                android.R.layout.simple_expandable_list_item_2,
-                new String[] {LIST_NAME, LIST_UUID},
-                new int[] { android.R.id.text1, android.R.id.text2 }
-        );
-        mGattServicesList.setAdapter(gattServiceAdapter);
+        // Make sure the GATT server we connected to is compatible with out locking application
+        if (isCompatServiceFound) {
+            updateConnectionState(R.string.connected_compatible);
+        } else {
+            updateConnectionState(R.string.connected_non_compatible);
+        }
+
     }
 
     private static IntentFilter makeGattUpdateIntentFilter() {

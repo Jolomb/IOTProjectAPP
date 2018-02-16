@@ -19,10 +19,16 @@
     <string name="label_device_address">Device address:</string>
     <string name="label_state">State:</string>
     <string name="no_data">No data</string>
-    <string name="connected">Connected</string>
+    <string name="connected_compatible">Connected To a Locking Device</string>
+    <string name="connected_non_compatible">Connected Device is not compatible!</string>
     <string name="disconnected">Disconnected</string>
     <string name="title_devices">BLE Device Scan</string>
     <string name="error_bluetooth_not_supported">Bluetooth not supported.</string>
+
+    <string name="waiting_for_user_click">Click on Lock image to Lock</string>
+    <string name="waiting_for_onboard_click">Waiting for On-Board Button</string>
+    <string name="lock_response_ready">Response Ready. Verify it</string>
+
 
     <string name="app_name">TI-RTOS mbedTLS integration BLE App</string>
 

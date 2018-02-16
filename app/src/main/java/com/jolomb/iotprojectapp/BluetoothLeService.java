@@ -32,6 +32,7 @@ import android.os.Binder;
 import android.os.IBinder;
 import android.util.Log;
 
+import java.io.UnsupportedEncodingException;
 import java.util.List;
 import java.util.UUID;
 
@@ -64,9 +65,10 @@ public class BluetoothLeService extends Service {
             "com.example.bluetooth.le.ACTION_DATA_AVAILABLE";
     public final static String EXTRA_DATA =
             "com.example.bluetooth.le.EXTRA_DATA";
+    public final static String EXTRA_UUID =
+            "com.example.bluetooth.le.EXTRA_UUID";
 
-    public final static UUID UUID_CRYPTO_SIGNER_CHALLANGE_INPUT =
-            UUID.fromString(SampleGattAttributes.CRYPTO_SIGNER_CHALLANGE_INPUT);
+    public final static String BLE_STR_ENCODING = "ASCII";
 
     // Implements callback methods for GATT events that the app cares about.  For example,
     // connection change and services discovered.
@@ -125,29 +127,16 @@ public class BluetoothLeService extends Service {
                                  final BluetoothGattCharacteristic characteristic) {
         final Intent intent = new Intent(action);
 
-        if (UUID_CRYPTO_SIGNER_CHALLANGE_INPUT.equals(characteristic.getUuid())) {
-            int flag = characteristic.getProperties();
-            int format = -1;
-            if ((flag & 0x01) != 0) {
-                format = BluetoothGattCharacteristic.FORMAT_UINT16;
-                Log.d(TAG, "Heart rate format UINT16.");
-            } else {
-                format = BluetoothGattCharacteristic.FORMAT_UINT8;
-                Log.d(TAG, "Heart rate format UINT8.");
-            }
-            final int heartRate = characteristic.getIntValue(format, 1);
-            Log.d(TAG, String.format("Received heart rate: %d", heartRate));
-            intent.putExtra(EXTRA_DATA, String.valueOf(heartRate));
-        } else {
-            // For all other profiles, writes the data formatted in HEX.
-            final byte[] data = characteristic.getValue();
-            if (data != null && data.length > 0) {
-                final StringBuilder stringBuilder = new StringBuilder(data.length);
-                for(byte byteChar : data)
-                    stringBuilder.append(String.format("%02X ", byteChar));
-                intent.putExtra(EXTRA_DATA, new String(data) + "\n" + stringBuilder.toString());
-            }
+        final byte[] data = characteristic.getValue();
+        if (data != null && data.length > 0) {
+            final StringBuilder stringBuilder = new StringBuilder(data.length);
+            for(byte byteChar : data)
+                stringBuilder.append(String.format("%02X ", byteChar));
+            intent.putExtra(EXTRA_DATA, stringBuilder.toString());
         }
+
+        String uuid = characteristic.getUuid().toString();
+        intent.putExtra(EXTRA_UUID, uuid);
         sendBroadcast(intent);
     }
 
@@ -282,9 +271,13 @@ public class BluetoothLeService extends Service {
     }
 
     public void writeCharacteristic(BluetoothGattCharacteristic characteristic, String value) {
-        byte[] valueBytes = value.getBytes();
-        characteristic.setValue(valueBytes);
-        mBluetoothGatt.writeCharacteristic(characteristic);
+        try {
+            byte valueBytes[] = value.getBytes(BLE_STR_ENCODING);
+            characteristic.setValue(valueBytes);
+            mBluetoothGatt.writeCharacteristic(characteristic);
+        } catch (UnsupportedEncodingException ex) {
+            // Well...
+        }
     }
 
     /**
@@ -300,14 +293,6 @@ public class BluetoothLeService extends Service {
             return;
         }
         mBluetoothGatt.setCharacteristicNotification(characteristic, enabled);
-
-        // This is specific to Heart Rate Measurement.
-        if (UUID_CRYPTO_SIGNER_CHALLANGE_INPUT.equals(characteristic.getUuid())) {
-            BluetoothGattDescriptor descriptor = characteristic.getDescriptor(
-                    UUID.fromString(SampleGattAttributes.CRYPTO_SIGNER_SIGNED_RESPONSE));
-            descriptor.setValue(BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE);
-            mBluetoothGatt.writeDescriptor(descriptor);
-        }
     }
 
     /**
