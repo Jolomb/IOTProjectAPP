@@ -35,6 +35,14 @@ public class SampleGattAttributes {
         attributes.put(CRYPTO_SIGNER_RESPONSE_STATE, "State of the signed response");
     }
 
+    public static String lookupNoDefault(String uuid) throws RuntimeException {
+        String name = attributes.get(uuid);
+        if (name == null) {
+            throw new RuntimeException();
+        }
+        return name;
+    }
+
     public static String lookup(String uuid, String defaultName) {
         String name = attributes.get(uuid);
         return name == null ? defaultName : name;

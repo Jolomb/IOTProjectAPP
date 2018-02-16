@@ -31,9 +31,11 @@ import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
+import android.widget.AdapterView;
 import android.widget.ExpandableListView;
 import android.widget.SimpleExpandableListAdapter;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -147,6 +149,36 @@ public class DeviceControlActivity extends Activity {
                 }
             };
 
+    private final ExpandableListView.OnItemLongClickListener servicesListLongClickListener = new ExpandableListView.OnItemLongClickListener () {
+
+
+        public boolean onItemLongClick(AdapterView<?> parent, View view, int position, long id) {
+            long packedPosition = mGattServicesList.getExpandableListPosition(position);
+            int itemType = ExpandableListView.getPackedPositionType(packedPosition);
+            int groupPosition = ExpandableListView.getPackedPositionGroup(packedPosition);
+            int childPosition = ExpandableListView.getPackedPositionChild(packedPosition);
+
+            if (mGattCharacteristics != null) {
+                final BluetoothGattCharacteristic characteristic =
+                        mGattCharacteristics.get(groupPosition).get(childPosition);
+
+        /*  if child item clicked */
+                if (itemType == ExpandableListView.PACKED_POSITION_TYPE_CHILD) {
+                    final int charaProp = characteristic.getProperties();
+                    if ((charaProp & BluetoothGattCharacteristic.PROPERTY_WRITE) > 0) {
+                        mBluetoothLeService.writeCharacteristic(characteristic, "HI!");
+                        Toast.makeText(getApplicationContext(), "Written Chalange to the buffer",
+                                Toast.LENGTH_SHORT).show();
+                    }
+                    return true;
+                }
+            }
+            return false;
+        }
+    };
+
+
+
     private void clearUI() {
         mGattServicesList.setAdapter((SimpleExpandableListAdapter) null);
         mDataField.setText(R.string.no_data);
@@ -165,6 +197,7 @@ public class DeviceControlActivity extends Activity {
         ((TextView) findViewById(R.id.device_address)).setText(mDeviceAddress);
         mGattServicesList = (ExpandableListView) findViewById(R.id.gatt_services_list);
         mGattServicesList.setOnChildClickListener(servicesListClickListner);
+        mGattServicesList.setOnItemLongClickListener(servicesListLongClickListener);
         mConnectionState = (TextView) findViewById(R.id.connection_state);
         mDataField = (TextView) findViewById(R.id.data_value);
 
@@ -247,8 +280,6 @@ public class DeviceControlActivity extends Activity {
     private void displayGattServices(List<BluetoothGattService> gattServices) {
         if (gattServices == null) return;
         String uuid = null;
-        String unknownServiceString = getResources().getString(R.string.unknown_service);
-        String unknownCharaString = getResources().getString(R.string.unknown_characteristic);
         ArrayList<HashMap<String, String>> gattServiceData = new ArrayList<HashMap<String, String>>();
         ArrayList<ArrayList<HashMap<String, String>>> gattCharacteristicData
                 = new ArrayList<ArrayList<HashMap<String, String>>>();
@@ -258,8 +289,16 @@ public class DeviceControlActivity extends Activity {
         for (BluetoothGattService gattService : gattServices) {
             HashMap<String, String> currentServiceData = new HashMap<String, String>();
             uuid = gattService.getUuid().toString();
+
+            // Find out if it's a service we recognize!
+            String serviceName = null;
+            try {
+                serviceName = SampleGattAttributes.lookupNoDefault(uuid);
+            } catch(RuntimeException ex){
+                continue;
+            }
             currentServiceData.put(
-                    LIST_NAME, SampleGattAttributes.lookup(uuid, unknownServiceString));
+                    LIST_NAME, serviceName);
             currentServiceData.put(LIST_UUID, uuid);
             gattServiceData.add(currentServiceData);
 
@@ -271,12 +310,21 @@ public class DeviceControlActivity extends Activity {
                     new ArrayList<BluetoothGattCharacteristic>();
 
             // Loops through available Characteristics.
+            String attributeName;
             for (BluetoothGattCharacteristic gattCharacteristic : gattCharacteristics) {
+                // Get the UUID of the current attribute
+                uuid = gattCharacteristic.getUuid().toString();
+                try {
+                    attributeName = SampleGattAttributes.lookupNoDefault(uuid);
+                } catch (RuntimeException ex) {
+                    // Only handle attributes we recognize
+                    continue;
+                }
+
                 charas.add(gattCharacteristic);
                 HashMap<String, String> currentCharaData = new HashMap<String, String>();
-                uuid = gattCharacteristic.getUuid().toString();
                 currentCharaData.put(
-                        LIST_NAME, SampleGattAttributes.lookup(uuid, unknownCharaString));
+                        LIST_NAME, attributeName);
                 currentCharaData.put(LIST_UUID, uuid);
                 gattCharacteristicGroupData.add(currentCharaData);
             }

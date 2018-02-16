@@ -17,6 +17,7 @@
 package com.jolomb.iotprojectapp;
 
 import android.Manifest;
+import android.annotation.TargetApi;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.app.ListActivity;
@@ -146,6 +147,7 @@ public class DeviceScanActivity extends ListActivity {
         super.onActivityResult(requestCode, resultCode, data);
     }
 
+    @TargetApi(23)
     private void getBLEPermissions() {
         List<String> permissionsNeeded = new ArrayList<String>();
 
@@ -177,9 +179,6 @@ public class DeviceScanActivity extends ListActivity {
                     REQUEST_CODE_ASK_MULTIPLE_PERMISSIONS);
             return;
         }
-
-        Toast.makeText(DeviceScanActivity.this, "No new Permission Required- Launching App .You are Awesome!!", Toast.LENGTH_SHORT)
-                .show();
     }
 
     private void showMessageOKCancel(String message, DialogInterface.OnClickListener okListener) {
@@ -191,6 +190,7 @@ public class DeviceScanActivity extends ListActivity {
                 .show();
     }
 
+    @TargetApi(23)
     private boolean addPermission(List<String> permissionsList, String permission) {
 
         if (checkSelfPermission(permission) != PackageManager.PERMISSION_GRANTED) {
@@ -219,17 +219,8 @@ public class DeviceScanActivity extends ListActivity {
 
                         ) {
                     // All Permissions Granted
-
-                    // Permission Denied
-                    Toast.makeText(DeviceScanActivity.this, "All Permission GRANTED !! Thank You :)", Toast.LENGTH_SHORT)
-                            .show();
-
-
                 } else {
                     // Permission Denied
-                    Toast.makeText(DeviceScanActivity.this, "One or More Permissions are DENIED Exiting App :(", Toast.LENGTH_SHORT)
-                            .show();
-
                     finish();
                 }
             }
