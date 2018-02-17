@@ -283,16 +283,10 @@ public class DeviceControlActivity extends Activity {
                     DeviceControlActivity.this.mChallangeBytes = new byte[CRYPTO_CHALLANGE_LENGTH];
                     random.nextBytes(mChallangeBytes);
 
-                    //final String randomString = new String(mChallangeBytes);
-                    //TODO: REMOVE THIS!
-                    final String randomString = "1111111111111111";
-                    for (int i = 0; i < CRYPTO_CHALLANGE_LENGTH; i++)
-                        mChallangeBytes[i] = '1';
-
                     // Write the challange we just created to the remote GATT char
                     DeviceControlActivity.this.mBluetoothLeService.writeCharacteristic(
                             DeviceControlActivity.this.mRemoteLockBufferChar,
-                            randomString
+                            mChallangeBytes
                     );
                 } else if(mRemoteLockState == LockState.RESPONSE_READY) {
                     // Read the signed response from the remote BLE device

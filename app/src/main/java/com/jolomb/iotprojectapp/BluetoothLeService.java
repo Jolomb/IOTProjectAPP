@@ -280,6 +280,11 @@ public class BluetoothLeService extends Service {
         }
     }
 
+    public void writeCharacteristic(BluetoothGattCharacteristic characteristic, byte[] value) {
+        characteristic.setValue(value);
+        mBluetoothGatt.writeCharacteristic(characteristic);
+
+    }
     /**
      * Enables or disables notification on a give characteristic.
      *
