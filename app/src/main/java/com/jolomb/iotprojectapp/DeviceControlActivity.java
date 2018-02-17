@@ -33,9 +33,12 @@ import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
+import android.view.ViewGroup;
 import android.widget.AdapterView;
+import android.widget.Button;
 import android.widget.ExpandableListView;
 import android.widget.ImageView;
+import android.widget.LinearLayout;
 import android.widget.SimpleExpandableListAdapter;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -104,6 +107,7 @@ public class DeviceControlActivity extends Activity {
     private LockState mRemoteLockState;
     private TextView mRemoteLocakStateText;
 
+    private Button mResetStateButton;
 
     private final byte PUBLIC_KEY_DER_PKCS8_BYTES[] = {
             0x30
@@ -250,6 +254,24 @@ public class DeviceControlActivity extends Activity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.gatt_services_characteristics);
 
+        mResetStateButton = new Button(this);
+        mResetStateButton.setText(R.string.rest_button_string);
+        mResetStateButton.setLayoutParams(new ViewGroup.LayoutParams(LinearLayout.LayoutParams.FILL_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT));
+
+        mResetStateButton.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) {
+                byte resetBytes[] = new byte[] { REMOTE_WAITING_FOR_INPUT_CHAR, 0};
+                mBluetoothLeService.writeCharacteristic(
+                        DeviceControlActivity.this.mRemoteLockStateChar,
+                        resetBytes);
+                mRemoteLockState = LockState.WAITING_FOR_INPUT_BUFFER;
+                updateRemoteLockState(mRemoteLockState);
+                ViewGroup linearLayout = findViewById(R.id.lock_device_control_activity_layout);
+                linearLayout.removeView(mResetStateButton);
+            }
+        });
+
         final Intent intent = getIntent();
         mDeviceName = intent.getStringExtra(EXTRAS_DEVICE_NAME);
         mDeviceAddress = intent.getStringExtra(EXTRAS_DEVICE_ADDRESS);
@@ -378,6 +400,8 @@ public class DeviceControlActivity extends Activity {
                     case SIGNATURE_DONE:
                         mRemoteLocakStateText.setText(R.string.access_granted);
                         ((ImageView)findViewById(R.id.lock_image)).setImageResource(R.drawable.access_granted);
+                        ViewGroup linearLayout = findViewById(R.id.lock_device_control_activity_layout);
+                        linearLayout.addView(mResetStateButton);
                 }
             }
         });

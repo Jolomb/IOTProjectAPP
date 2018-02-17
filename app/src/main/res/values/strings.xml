@@ -32,6 +32,8 @@
     <string name="incorrect_key">Access Denied!</string>
     <string name="access_granted">Access Granted!</string>
 
+    <string name="rest_button_string">Another one?</string>
+
     <string name="app_name">TI-RTOS mbedTLS integration BLE App</string>
 
     <string name="unknown_device">Unknown device</string>

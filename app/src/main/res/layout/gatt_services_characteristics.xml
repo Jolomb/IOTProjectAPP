@@ -19,7 +19,8 @@
     android:orientation="vertical"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:layout_margin="10dp">
+    android:layout_margin="10dp"
+    android:id="@+id/lock_device_control_activity_layout">
 
     <LinearLayout android:orientation="horizontal"
         android:layout_width="match_parent"
