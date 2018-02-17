@@ -25,10 +25,12 @@
     <string name="title_devices">BLE Device Scan</string>
     <string name="error_bluetooth_not_supported">Bluetooth not supported.</string>
 
+    <string name="lock_failed">Remote signing failed!</string>
     <string name="waiting_for_user_click">Click on Lock image to Lock</string>
     <string name="waiting_for_onboard_click">Waiting for On-Board Button</string>
     <string name="lock_response_ready">Response Ready. Verify it</string>
-
+    <string name="incorrect_key">Access Denied!</string>
+    <string name="access_granted">Access Granted!</string>
 
     <string name="app_name">TI-RTOS mbedTLS integration BLE App</string>
 
