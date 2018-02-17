@@ -108,7 +108,7 @@ public class DeviceControlActivity extends Activity {
     private TextView mRemoteLocakStateText;
 
     private Button mResetStateButton;
-
+    
     private final byte PUBLIC_KEY_DER_PKCS8_BYTES[] = {
             0x30
             , (byte)0x81, (byte)0x9f, (byte)0x30, (byte)0x0d, (byte)0x06, (byte)0x09, (byte)0x2a
@@ -136,6 +136,33 @@ public class DeviceControlActivity extends Activity {
             , (byte)0xbd, (byte)0x91, (byte)0x02, (byte)0x03, (byte)0x01, (byte)0x00, (byte)0x01
     };
 
+    /*This is just for testing that the signature works. We will use a different public key...
+    private final byte PUBLIC_KEY_DER_PKCS8_BYTES[] = {
+            (byte)0x30
+            , (byte)0x81, (byte)0x9f, (byte)0x30, (byte)0x0d, (byte)0x06, (byte)0x09, (byte)0x2a
+            , (byte)0x86, (byte)0x48, (byte)0x86, (byte)0xf7, (byte)0x0d, (byte)0x01, (byte)0x01
+            , (byte)0x01, (byte)0x05, (byte)0x00, (byte)0x03, (byte)0x81, (byte)0x8d, (byte)0x00
+            , (byte)0x30, (byte)0x81, (byte)0x89, (byte)0x02, (byte)0x81, (byte)0x81, (byte)0x00
+            , (byte)0xd9, (byte)0x20, (byte)0xed, (byte)0x11, (byte)0xcb, (byte)0xdb, (byte)0xc4
+            , (byte)0x31, (byte)0x94, (byte)0x68, (byte)0xec, (byte)0x0a, (byte)0x2f, (byte)0xeb
+            , (byte)0x41, (byte)0xa8, (byte)0x89, (byte)0xde, (byte)0xbe, (byte)0x82, (byte)0xff
+            , (byte)0x0d, (byte)0x0a, (byte)0x00, (byte)0x2e, (byte)0xe3, (byte)0x50, (byte)0xfd
+            , (byte)0xb2, (byte)0x9b, (byte)0xe3, (byte)0xf4, (byte)0x49, (byte)0x5e, (byte)0x23
+            , (byte)0x97, (byte)0x51, (byte)0xf4, (byte)0x8f, (byte)0x39, (byte)0x2b, (byte)0xd5
+            , (byte)0x18, (byte)0xe6, (byte)0xfd, (byte)0x32, (byte)0x44, (byte)0x4a, (byte)0xc8
+            , (byte)0x8b, (byte)0xba, (byte)0xf3, (byte)0x6c, (byte)0x89, (byte)0xe6, (byte)0xa3
+            , (byte)0x51, (byte)0xd2, (byte)0xf9, (byte)0x74, (byte)0xe9, (byte)0x77, (byte)0xef
+            , (byte)0xe3, (byte)0xc6, (byte)0x50, (byte)0x7b, (byte)0x7a, (byte)0xde, (byte)0x1c
+            , (byte)0xd8, (byte)0xdb, (byte)0x10, (byte)0x64, (byte)0xb3, (byte)0xad, (byte)0xa7
+            , (byte)0x9e, (byte)0xf2, (byte)0x6c, (byte)0x90, (byte)0xdb, (byte)0xfb, (byte)0x4a
+            , (byte)0xca, (byte)0x06, (byte)0x66, (byte)0xee, (byte)0x1d, (byte)0xbf, (byte)0x6a
+            , (byte)0xbd, (byte)0x2f, (byte)0x17, (byte)0x90, (byte)0x79, (byte)0xdc, (byte)0x25
+            , (byte)0xbf, (byte)0xbe, (byte)0x5c, (byte)0x67, (byte)0x6c, (byte)0x88, (byte)0x82
+            , (byte)0x20, (byte)0xfb, (byte)0x35, (byte)0x9e, (byte)0x4f, (byte)0x89, (byte)0x5b
+            , (byte)0x9b, (byte)0xfa, (byte)0x84, (byte)0x05, (byte)0xb2, (byte)0xde, (byte)0x11
+            , (byte)0x73, (byte)0x63, (byte)0x48, (byte)0x49, (byte)0x11, (byte)0xc5, (byte)0x06
+            , (byte)0xb5, (byte)0xa9, (byte)0x02, (byte)0x03, (byte)0x01, (byte)0x00, (byte)0x01
+    }; */
 
     // Code to manage Service lifecycle.
     private final ServiceConnection mServiceConnection = new ServiceConnection() {
@@ -226,9 +253,6 @@ public class DeviceControlActivity extends Activity {
                                 mRemoteLockState = LockState.SIGNATURE_DONE;
                                 updateRemoteLockState(mRemoteLockState);
 
-                                //Reset the remote board for another signature
-                                mBluetoothLeService.writeCharacteristic(mRemoteLockStateChar,
-                                        REMOTE_LOCK_DONE_STRING);
                             } else {
                                 mRemoteLockState = LockState.INCORRECT_KEY;
                                 updateRemoteLockState(mRemoteLockState);
@@ -262,6 +286,10 @@ public class DeviceControlActivity extends Activity {
         mResetStateButton.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) {
                 byte resetBytes[] = new byte[] { REMOTE_WAITING_FOR_INPUT_CHAR, 0};
+                //Reset the remote board for another signature
+                mBluetoothLeService.writeCharacteristic(mRemoteLockStateChar,
+                        REMOTE_LOCK_DONE_STRING);
+
                 mBluetoothLeService.writeCharacteristic(
                         DeviceControlActivity.this.mRemoteLockStateChar,
                         resetBytes);
@@ -376,6 +404,7 @@ public class DeviceControlActivity extends Activity {
         runOnUiThread(new Runnable() {
             @Override
             public void run() {
+                ViewGroup linearLayout;
                 switch (state) {
                     case WAITING_FOR_INPUT_BUFFER:
                         mRemoteLocakStateText.setText(R.string.waiting_for_user_click);
@@ -396,12 +425,15 @@ public class DeviceControlActivity extends Activity {
                     case INCORRECT_KEY:
                         mRemoteLocakStateText.setText(R.string.incorrect_key);
                         ((ImageView)findViewById(R.id.lock_image)).setImageResource(R.drawable.access_denied);
+                        linearLayout = findViewById(R.id.lock_device_control_activity_layout);
+                        linearLayout.addView(mResetStateButton);
                         break;
                     case SIGNATURE_DONE:
                         mRemoteLocakStateText.setText(R.string.access_granted);
                         ((ImageView)findViewById(R.id.lock_image)).setImageResource(R.drawable.access_granted);
-                        ViewGroup linearLayout = findViewById(R.id.lock_device_control_activity_layout);
+                        linearLayout = findViewById(R.id.lock_device_control_activity_layout);
                         linearLayout.addView(mResetStateButton);
+                        break;
                 }
             }
         });
