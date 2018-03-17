@@ -18,7 +18,9 @@ package com.jolomb.iotprojectapp;
 
 import android.app.Activity;
 import android.bluetooth.BluetoothClass;
+import android.bluetooth.BluetoothGatt;
 import android.bluetooth.BluetoothGattCharacteristic;
+import android.bluetooth.BluetoothGattDescriptor;
 import android.bluetooth.BluetoothGattService;
 import android.content.BroadcastReceiver;
 import android.content.ComponentName;
@@ -52,6 +54,7 @@ import java.security.spec.X509EncodedKeySpec;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.UUID;
 import java.util.regex.Pattern;
 
 /**
@@ -513,6 +516,7 @@ public class DeviceControlActivity extends Activity {
                     mBluetoothLeService.readCharacteristic(gattCharacteristic);
                     mBluetoothLeService.setCharacteristicNotification(gattCharacteristic, true);
                     mRemoteLockStateChar = gattCharacteristic;
+
                 } else if (uuid.equals(SampleGattAttributes.CRYPTO_SIGNER_CHALLANGE_INPUT)) {
                     // Hold this char aside for a while
                     mRemoteLockBufferChar = gattCharacteristic;
